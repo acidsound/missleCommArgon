@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEGIS DOME // 3D Missile Command</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 3D WebGL Viewport -->
+  <div id="canvas-container"></div>
+  <div class="scanline-overlay"></div>
+
+  <!-- Floating 3D Score & Chain Popups -->
+  <div id="floating-labels"></div>
+
+  <!-- 2D/3D Synced Tactical Crosshair -->
+  <div id="hud-crosshair">
+    <div class="crosshair-ring"></div>
+    <div id="crosshair-readout">ALT: 400m · T-0.8s</div>
+  </div>
+
+  <!-- Alert Banner -->
+  <div id="hud-alert-banner" class="hidden">WAVE 1 INCOMING</div>
+
+  <!-- Tactical HUD Layer -->
+  <div id="hud-layer">
+    <!-- Top Bar -->
+    <div class="hud-top">
+      <div class="hud-panel telemetry-bar">
+        <div class="stat-block">
+          <span class="stat-label">SCORE</span>
+          <span class="stat-value" id="hud-score">0</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">HIGH SCORE</span>
+          <span class="stat-value emerald" id="hud-highscore">0</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">WAVE</span>
+          <span class="stat-value" id="hud-wave">1</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">MULTIPLIER</span>
+          <span class="stat-value amber" id="hud-mult">1X</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">THREATS</span>
+          <span class="stat-value" id="hud-threats">0</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">BIO-CITIES</span>
+          <span class="stat-value emerald" id="hud-cities">6 / 6</span>
+        </div>
+      </div>
+
+      <div class="hud-top-right">
+        <div class="hud-panel toolbar-group">
+          <div class="btn-row">
+            <button class="hud-btn cam-btn active" data-cam="COMMAND" title="Tactical Command View (C)">CAM: COMMAND</button>
+            <button class="hud-btn cam-btn" data-cam="OVERHEAD" title="Overhead Radar Dome View (C)">OVERHEAD</button>
+            <button class="hud-btn cam-btn" data-cam="CINEMATIC" title="Low Turret View (C)">LOW ANGLE</button>
+          </div>
+          <div class="btn-row">
+            <button class="hud-btn xr-btn" id="btn-enter-vr" title="Enter Immersive VR Mode">ENTER VR</button>
+            <button class="hud-btn xr-btn" id="btn-enter-ar" title="Enter Passthrough MR/AR Mode">MR/AR</button>
+            <button class="hud-btn" id="btn-orbit-mode" title="Toggle Left-Click Camera Orbit">ORBIT DRAG: R-CLICK</button>
+            <button class="hud-btn active" id="btn-bloom" title="Toggle Bloom Glow (G)">BLOOM: ON</button>
+            <button class="hud-btn" id="btn-mute" title="Toggle Audio (M)">AUDIO: ON</button>
+            <button class="hud-btn" id="btn-pause" title="Pause Game (P)">PAUSE</button>
+          </div>
+          <div class="altitude-control" title="Default 3D Engagement Altitude Plane (Mouse Wheel)">
+            <span>3D DOME ALT</span>
+            <input type="range" id="altitude-slider" min="14" max="82" value="40" />
+          </div>
+        </div>
+
+        <div class="hud-panel radar-box">
+          <canvas id="radar-canvas" width="116" height="116"></canvas>
+          <span class="radar-caption">SECTOR RADAR</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Tactical Dock -->
+    <div class="hud-bottom">
+      <div class="dock-row">
+        <div class="battery-card" id="battery-card-0" data-battery="0">
+          <div class="battery-header">
+            <span><span class="battery-key">1 / Q</span>ALPHA [WEST]</span>
+            <span class="battery-ammo-text" id="battery-ammo-0">10/10</span>
+          </div>
+          <div class="ammo-pips" id="battery-pips-0"></div>
+        </div>
+
+        <div class="battery-card hyper" id="battery-card-1" data-battery="1">
+          <div class="battery-header">
+            <span><span class="battery-key">2 / W</span>BRAVO [HYPER]</span>
+            <span class="battery-ammo-text" id="battery-ammo-1">12/12</span>
+          </div>
+          <div class="ammo-pips" id="battery-pips-1"></div>
+        </div>
+
+        <div class="battery-card" id="battery-card-2" data-battery="2">
+          <div class="battery-header">
+            <span><span class="battery-key">3 / E</span>CHARLIE [EAST]</span>
+            <span class="battery-ammo-text" id="battery-ammo-2">10/10</span>
+          </div>
+          <div class="ammo-pips" id="battery-pips-2"></div>
+        </div>
+
+        <div class="emp-card">
+          <div class="emp-bar-track">
+            <div id="emp-bar-fill"></div>
+          </div>
+          <button id="btn-emp" title="Detonate Aegis Flak EMP Overdrive (F)">EMP CHARGE 50%</button>
+        </div>
+      </div>
+
+      <div class="controls-hint-bar">
+        <kbd>LEFT CLICK</kbd> / <kbd>SPACE</kbd> Auto-Fire Optimal Silo ·
+        <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> Fire Alpha / Bravo (Hyper) / Charlie ·
+        <kbd>RIGHT DRAG</kbd> Orbit 3D Camera ·
+        <kbd>WHEEL</kbd> 3D Altitude ·
+        <kbd>F</kbd> Aegis EMP
+      </div>
+    </div>
+  </div>
+
+  <!-- Title / Briefing Modal -->
+  <div class="modal-backdrop" id="modal-menu">
+    <div class="modal-card">
+      <div class="badge-row">
+        <div class="modal-badge">NORAD TACTICAL DEFENSE SIMULATION</div>
+        <div class="modal-badge xr-badge" id="xr-status-badge">WEBXR STANDBY</div>
+      </div>
+      <h1 class="modal-title">AEGIS DOME 3D</h1>
+      <p class="modal-subtitle">
+        Defend 6 Bio-Dome Cities across a 3D ballistic theater. Intercept ICBM salvos, MIRV splitters, orbital bombers, and evasive smart warheads with cascading 3D plasma chain-reactions.
+      </p>
+
+      <div class="guide-grid">
+        <div class="guide-item">
+          <div class="guide-item-title">SMART 3D TARGETING</div>
+          <div class="guide-item-desc">
+            Hover near any warhead or its green lead ring to auto-lock 3D intercept depth, or use the <kbd>Scroll Wheel</kbd> to adjust free-sky dome altitude.
+          </div>
+        </div>
+        <div class="guide-item">
+          <div class="guide-item-title">3 ARTICULATED SILOS</div>
+          <div class="guide-item-desc">
+            <kbd>Left Click</kbd> auto-fires the fastest battery, or press <kbd>1</kbd>, <kbd>2</kbd> (Hyper-Velocity Center), <kbd>3</kbd> for manual silo control.
+          </div>
+        </div>
+        <div class="guide-item">
+          <div class="guide-item-title">3D CHAIN REACTIONS</div>
+          <div class="guide-item-desc">
+            Enemy warheads caught inside an expanding plasma sphere detonate into secondary 3D spheres for massive combo multipliers!
+          </div>
+        </div>
+        <div class="guide-item">
+          <div class="guide-item-title">WEBXR (VR &amp; MR/AR)</div>
+          <div class="guide-item-desc">
+            Aim with dual 6DoF VR laser controllers! <kbd>Trigger</kbd> Auto-Fires, <kbd>Grip</kbd> Fires Hyper-Bravo, <kbd>A/X</kbd> EMP Overdrive, <kbd>B/Y</kbd> Tabletop/Giant Scale.
+          </div>
+        </div>
+      </div>
+
+      <div class="diff-selector">
+        <button class="diff-btn" data-diff="CADET">CADET</button>
+        <button class="diff-btn active" data-diff="COMMANDER">COMMANDER</button>
+        <button class="diff-btn" data-diff="VANGUARD">VANGUARD</button>
+      </div>
+
+      <div class="cta-stack">
+        <button class="cta-btn" id="btn-start-game">INITIALIZE AEGIS DEFENSE (DESKTOP 3D)</button>
+        <button class="cta-btn xr-cta-btn" id="btn-menu-vr">LAUNCH IN WEBXR (VR / MR HEADSET)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wave Clear Bonus Tally Modal -->
+  <div class="modal-backdrop hidden" id="modal-tally">
+    <div class="modal-card">
+      <div class="modal-badge">SECTOR SECURED</div>
+      <h2 class="modal-title" id="tally-wave-title">WAVE 1 DEFEATED</h2>
+      <div class="tally-rows">
+        <div class="tally-row">
+          <span>UNUSED INTERCEPTORS</span>
+          <strong id="tally-ammo-val">+0</strong>
+        </div>
+        <div class="tally-row">
+          <span>SURVIVING BIO-CITIES</span>
+          <strong id="tally-city-val">+0</strong>
+        </div>
+        <div class="tally-row highlight">
+          <span>TOTAL WAVE BONUS</span>
+          <strong id="tally-total-val">+0</strong>
+        </div>
+      </div>
+      <p class="modal-subtitle">Re-arming Alpha, Bravo, and Charlie batteries for next wave...</p>
+    </div>
+  </div>
+
+  <!-- Pause Modal -->
+  <div class="modal-backdrop hidden" id="modal-pause">
+    <div class="modal-card">
+      <div class="modal-badge">SIMULATION PAUSED</div>
+      <h2 class="modal-title">SYSTEM ON STANDBY</h2>
+      <p class="modal-subtitle">Press <kbd>P</kbd> or click below to resume tactical defense.</p>
+      <button class="cta-btn" id="btn-resume-game">RESUME DEFENSE</button>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div class="modal-backdrop hidden" id="modal-gameover">
+    <div class="modal-card">
+      <div class="modal-badge" style="color: #ff2a55; border-color: #ff2a55;">DEFENSE PERIMETER BREACHED</div>
+      <h2 class="modal-title" style="color: #ff2a55;">THE END</h2>
+      <p class="modal-subtitle">All 6 Bio-Dome Cities have fallen.</p>
+
+      <div class="tally-rows">
+        <div class="tally-row highlight">
+          <span>FINAL SCORE</span>
+          <strong id="go-score">0</strong>
+        </div>
+        <div class="tally-row">
+          <span>HIGH SCORE</span>
+          <strong id="go-highscore">0</strong>
+        </div>
+        <div class="tally-row">
+          <span>WAVES SURVIVED</span>
+          <strong id="go-waves">1</strong>
+        </div>
+        <div class="tally-row">
+          <span>WARHEADS INTERCEPTED</span>
+          <strong id="go-kills">0</strong>
+        </div>
+        <div class="tally-row">
+          <span>MAX CHAIN REACTION</span>
+          <strong id="go-chain">1x</strong>
+        </div>
+      </div>
+
+      <button class="cta-btn" id="btn-restart-game">RELAUNCH DEFENSE</button>
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
